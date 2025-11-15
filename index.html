@@ -186,7 +186,7 @@
             const pdf = new jsPDF('p', 'mm', 'a4'); 
             let yOffset = 15;
             const MARGIN = 15;
-            const pageWidth = 210; // A4 width in mm
+            const pageWidth = 210; // Largura do A4 em mm
             
             const monthText = monthSelect.options[monthSelect.selectedIndex].text;
             const yearText = yearSelect.value;
@@ -194,11 +194,22 @@
 
             showMessage("Gerando PDF customizado... Por favor, aguarde.", "...", false); 
 
-            // 1. TÍTULO E CABEÇALHO
-            pdf.setFontSize(16);
-            pdf.text("Estúdio Infocus - Planilha de Horas Extras", pageWidth / 2, yOffset, { align: 'center' });
+            // 1. TÍTULO E CABEÇALHO (INCLUINDO NOME E EMPRESA)
+            pdf.setFontSize(18);
+            pdf.setFont(undefined, 'bold');
+            pdf.text("Estúdio Infocus", pageWidth / 2, yOffset, { align: 'center' });
             yOffset += 7;
+            
+            pdf.setFontSize(14);
+            pdf.setFont(undefined, 'normal');
+            pdf.text("Planilha de Horas Extras", pageWidth / 2, yOffset, { align: 'center' });
+            yOffset += 7;
+
             pdf.setFontSize(12);
+            pdf.text("Matheus Magalhães de Castro", pageWidth / 2, yOffset, { align: 'center' });
+            yOffset += 7;
+            
+            pdf.setFontSize(10);
             pdf.text(`Referência: ${monthText} / ${yearText}`, pageWidth / 2, yOffset, { align: 'center' });
             yOffset += 10;
             
@@ -249,12 +260,18 @@
                 });
             });
 
-            // 3. GERAÇÃO DA TABELA USANDO AUTOTABLE
+            // Largura total da tabela (em mm): 15 + 10 + 20 + 20 + 20 + 20 + 20 + 20 = 145mm
+            const TABLE_WIDTH = 145; 
+            // Margem calculada para centralizar: (210 - 145) / 2 = 32.5mm
+            const TABLE_LEFT_MARGIN = (pageWidth - TABLE_WIDTH) / 2;
+
+
+            // 3. GERAÇÃO DA TABELA USANDO AUTOTABLE (AGORA CENTRALIZADA)
             pdf.autoTable({
                 startY: yOffset,
                 head: [tableHeaders],
                 body: tableBody.map(row => row.data),
-                margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
+                margin: { top: yOffset, right: TABLE_LEFT_MARGIN, bottom: MARGIN, left: TABLE_LEFT_MARGIN },
                 styles: { 
                     fontSize: 8, 
                     cellPadding: 2, 
@@ -274,7 +291,7 @@
                         data.cell.styles.textColor = [0, 0, 0]; // Garante texto preto
                     }
                 },
-                // Ajuste de largura das colunas (para caber na página A4)
+                // Ajuste de largura das colunas (totalizando 145mm)
                 columnStyles: {
                     0: { cellWidth: 15 }, // Data
                     1: { cellWidth: 10 }, // Dia
@@ -292,7 +309,12 @@
             pdf.setFontSize(14);
             pdf.setFont(undefined, 'bold');
             
-            pdf.text(`Saldo Total de Horas Extras: ${totalOvertime}`, pageWidth - MARGIN, yOffset, { align: 'right' });
+            // Centraliza o total com base na margem da tabela, não na página.
+            const totalText = `Saldo Total de Horas Extras: ${totalOvertime}`;
+            const textWidth = pdf.getStringUnitWidth(totalText) * 14 / pdf.internal.scaleFactor; // Estimar largura do texto
+            const textX = pageWidth - TABLE_LEFT_MARGIN; // Alinha à direita da tabela (PageWidth - LeftMargin)
+            
+            pdf.text(totalText, textX, yOffset, { align: 'right' });
             
             // 5. SALVAR O ARQUIVO
             pdf.save(`Planilha_Horas_Extras_${monthText}_${yearText}.pdf`);
@@ -650,6 +672,36 @@
 
         // --- GERAÇÃO DA PLANILHA (MANTIDA) ---
 
+        async function fetchHolidays(year) {
+            if (holidaysCache[year]) {
+                return holidaysCache[year];
+            }
+            try {
+                const maxRetries = 3;
+                let lastError = null;
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        const response = await fetch(`https://brasilapi.com.br/api/feriados/v1/${year}`);
+                        if (!response.ok) {
+                            throw new Error('Falha na resposta da API.');
+                        }
+                        const data = await response.json();
+                        const holidayDates = new Set(data.map(h => h.date));
+                        holidaysCache[year] = holidayDates;
+                        return holidayDates;
+                    } catch (error) {
+                        lastError = error;
+                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                    }
+                }
+                throw lastError; 
+            } catch (error) {
+                console.error("Erro fatal ao buscar feriados após várias retentativas:", error);
+                holidaysCache[year] = new Set();
+                return holidaysCache[year];
+            }
+        }
+        
         async function generateMonthSheet(year, month) {
             if (!year || !month) return;
 
@@ -752,36 +804,6 @@
         }
 
         // --- FUNÇÕES DE NAVEGAÇÃO E UTILS (MANTIDA) ---
-
-        async function fetchHolidays(year) {
-            if (holidaysCache[year]) {
-                return holidaysCache[year];
-            }
-            try {
-                const maxRetries = 3;
-                let lastError = null;
-                for (let i = 0; i < maxRetries; i++) {
-                    try {
-                        const response = await fetch(`https://brasilapi.com.br/api/feriados/v1/${year}`);
-                        if (!response.ok) {
-                            throw new Error('Falha na resposta da API.');
-                        }
-                        const data = await response.json();
-                        const holidayDates = new Set(data.map(h => h.date));
-                        holidaysCache[year] = holidayDates;
-                        return holidayDates;
-                    } catch (error) {
-                        lastError = error;
-                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-                    }
-                }
-                throw lastError; 
-            } catch (error) {
-                console.error("Erro fatal ao buscar feriados após várias retentativas:", error);
-                holidaysCache[year] = new Set();
-                return holidaysCache[year];
-            }
-        }
 
         function populateSelectors() {
             const currentYear = new Date().getFullYear();
