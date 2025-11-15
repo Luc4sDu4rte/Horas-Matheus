@@ -12,10 +12,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- 3. Adiciona SheetJS para exportar/importar de XLSX -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- 4. ADICIONA BIBLIOTECAS PARA GERAÇÃO DE PDF BAIXÁVEL -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <!-- Usa a versão modular do jsPDF -->
+    <!-- 4. ADICIONA BIBLIOTECAS PARA GERAÇÃO DE PDF BAIXÁVEL (jsPDF) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- 5. Adiciona plugin AutoTable para desenhar tabelas no PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     
     <style>
         /* Estilos personalizados */
@@ -55,73 +55,21 @@
             background-color: #bfdbfe; /* blue-200 */
         }
         /* --- FIM CORES --- */
-
-
-        /* Estilos de impressão e PDF (Otimizados para Saída Limpa) */
-        @media print {
-            body {
-                font-size: 10pt;
-                color: #000;
-                background-color: #fff;
-            }
-            /* Garante que controles e mensagens fiquem escondidos */
-            .print-hidden, #message-container { 
-                display: none !important;
-            }
-            .print-container {
-                width: 100%;
-                max-width: 100%;
-                padding: 0;
-                margin: 0;
-                box-shadow: none;
-                border: none;
-            }
-            table {
-                border-collapse: collapse;
-                width: 100%;
-                box-shadow: none;
-            }
-            th, td {
-                border: 1px solid #ccc !important;
-                padding: 4px 6px;
-                color: #000;
-                background-color: #fff !important; 
-            }
-            /* Re-aplica cores de fundo específicas na impressão/PDF */
-            .is-sunday td, .is-national-holiday td, .is-municipal-holiday td {
-                -webkit-print-color-adjust: exact;
-                color-adjust: exact;
-            }
-            .is-sunday td { background-color: #fecaca !important; }
-            .is-national-holiday td { background-color: #fef08a !important; }
-            .is-municipal-holiday td { background-color: #bfdbfe !important; }
-
-            input[type="time"] {
-                border: none;
-                padding: 0;
-                width: auto;
-                background-color: transparent !important;
-                text-align: center;
-            }
-            input[type="time"]:invalid {
-                color: #000;
-            }
-        }
     </style>
 </head>
 <body class="bg-gray-100 p-4 sm:p-8">
 
-    <div class="max-w-7xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-lg print-container">
+    <div class="max-w-7xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-lg">
         
         <!-- Cabeçalho -->
         <header class="text-center mb-6 border-b pb-6">
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Estúdio Infocus</h1>
             <h2 class="text-xl sm:text-2xl font-semibold text-gray-700 mt-2">Planilha de Horas Extras</h2>
-            <p class="text-lg text-gray-600 mt-1">Matheus Pica de Marreta</p>
+            <p class="text-lg text-gray-600 mt-1">Matheus Magalhães de Castro</p>
         </header>
 
-        <!-- Controles de Navegação (Escondidos na impressão e na captura do PDF) -->
-        <nav class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 print-hidden space-y-4 md:space-y-0">
+        <!-- Controles de Navegação -->
+        <nav class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
             
             <!-- Seletores de Data -->
             <div class="flex items-center space-x-4">
@@ -148,19 +96,16 @@
                 <button onclick="exportToXLSX()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2">
                     Exportar para XLSX
                 </button>
-                <!-- NOVO BOTÃO PARA GERAR ARQUIVO PDF -->
-                <button onclick="generatePDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2">
+                <!-- BOTÃO DE PDF CUSTOMIZADO -->
+                <button onclick="generateSimplifiedPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2">
                     Gerar Arquivo PDF
                 </button>
-                <!-- BOTÃO DE IMPRESSÃO (FUNÇÃO ANTIGA) -->
-                <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base">
-                    Imprimir Planilha
-                </button>
+                <!-- BOTÃO DE IMPRIMIR REMOVIDO CONFORME SOLICITADO -->
             </div>
         </nav>
 
         <!-- Container de Mensagem (Para Pop-ups) -->
-        <div id="message-container" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center print-hidden z-50">
+        <div id="message-container" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50">
             <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
                 <p id="message-text" class="text-lg font-medium text-gray-700 mb-4"></p>
                 <button id="message-action-button" onclick="closeMessage()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">
@@ -179,7 +124,7 @@
             <!-- Totalizador será inserido aqui -->
         </div>
 
-        <footer class="text-center text-xs text-gray-400 mt-8 print-hidden">
+        <footer class="text-center text-xs text-gray-400 mt-8">
             Feriados nacionais (Brasil) fornecidos por BrasilAPI. Feriado municipal de Piracanjuba, GO (15/08) fixo.
         </footer>
     </div>
@@ -230,78 +175,129 @@
             messageContainer.classList.remove('flex');
         }
 
-        // --- GERAÇÃO DE PDF (FUNÇÃO OTIMIZADA PARA CONTEÚDO LONGO) ---
-        window.generatePDF = async function() {
-            if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined') {
+        // --- GERAÇÃO DE PDF SIMPLIFICADO E CUSTOMIZADO ---
+        window.generateSimplifiedPDF = function() {
+            if (typeof window.jspdf === 'undefined') {
                 showMessage("As bibliotecas de geração de PDF não foram carregadas. A função falhou.");
                 return;
             }
 
             const { jsPDF } = window.jspdf;
-            const mainContent = document.querySelector('.print-container');
+            const pdf = new jsPDF('p', 'mm', 'a4'); 
+            let yOffset = 15;
+            const MARGIN = 15;
+            const pageWidth = 210; // A4 width in mm
             
-            showMessage("Gerando PDF... Por favor, aguarde.", "...", false); 
+            const monthText = monthSelect.options[monthSelect.selectedIndex].text;
+            const yearText = yearSelect.value;
+            const totalOvertime = document.getElementById('total-overtime').textContent;
 
-            // 1. Prepara a Captura: Esconde controles e garante que todo o conteúdo seja visível
-            const hiddenElements = document.querySelectorAll('.print-hidden');
-            const originalOverflow = sheetContainer.style.overflowX;
-            const originalHeight = sheetContainer.style.height;
+            showMessage("Gerando PDF customizado... Por favor, aguarde.", "...", false); 
 
-            hiddenElements.forEach(el => el.style.display = 'none');
+            // 1. TÍTULO E CABEÇALHO
+            pdf.setFontSize(16);
+            pdf.text("Estúdio Infocus - Planilha de Horas Extras", pageWidth / 2, yOffset, { align: 'center' });
+            yOffset += 7;
+            pdf.setFontSize(12);
+            pdf.text(`Referência: ${monthText} / ${yearText}`, pageWidth / 2, yOffset, { align: 'center' });
+            yOffset += 10;
             
-            // Remove scrollbars e garante que o container expanda para o conteúdo total
-            sheetContainer.style.overflowX = 'visible';
-            sheetContainer.style.height = 'auto'; 
+            // 2. PREPARAÇÃO DOS DADOS DA TABELA
+            const tableHeaders = [
+                "Data", "Dia", "Ent. Manhã", "Sai. Manhã", 
+                "Ent. Tarde", "Sai. Tarde", "Total Trab.", "Hrs Extras"
+            ];
+            const tableBody = [];
 
-            try {
-                // 2. Capturar o conteúdo principal (aumenta a escala para melhor nitidez)
-                const canvas = await html2canvas(mainContent, { 
-                    scale: 3, 
-                    logging: false,
-                    useCORS: true 
-                });
-
-                const imgData = canvas.toDataURL('image/jpeg', 1.0);
-                
-                // Configurações do PDF (Paisagem A4)
-                const pdf = new jsPDF('l', 'mm', 'a4'); 
-                const pdfWidth = 297; // Largura A4 paisagem em mm
-                const pdfHeight = 210; // Altura A4 paisagem em mm
-                
-                // Calcula a altura da imagem no PDF, mantendo a proporção.
-                const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-                
-                let position = 0;
-                let heightLeft = imgHeight;
-
-                // 3. Adicionar imagem ao PDF com paginação
-                while (heightLeft > 0) {
-                    // Adiciona a imagem no ponto de corte
-                    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-                    heightLeft -= pdfHeight;
-                    
-                    if (heightLeft > 0) {
-                        pdf.addPage();
-                        // Move a posição para "cortar" a imagem no canvas original
-                        position = -((imgHeight - heightLeft) * (pdfWidth / imgHeight));
-                    }
-                }
-
-                // 4. Salvar o arquivo
-                const monthText = monthSelect.options[monthSelect.selectedIndex].text;
-                const yearText = yearSelect.value;
-                pdf.save(`Planilha_Horas_Infocus_${monthText}_${yearText}.pdf`);
-                
-            } catch (error) {
-                console.error("Erro ao gerar o PDF:", error);
-                showMessage("Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.");
-            } finally {
-                // 5. Limpeza: Restaura estilos e fecha o loading
-                sheetContainer.style.overflowX = originalOverflow;
-                sheetContainer.style.height = originalHeight;
-                hiddenElements.forEach(el => el.style.display = ''); 
-                closeMessage();
+            const totalWorkedCell = sheetContainer.querySelector('.total-worked');
+            if (!totalWorkedCell) {
+                 closeMessage();
+                 return showMessage("Erro: A tabela não está carregada corretamente para gerar o PDF.");
             }
+
+            document.querySelectorAll('#sheet-body tr').forEach(row => {
+                const dayIndex = row.id.replace('row-', '');
+                const savedEntry = currentMonthData[dayIndex] || {};
+                
+                const dayDate = row.cells[0].textContent; 
+                const dayOfWeek = row.cells[1].textContent; 
+                const totalWorked = row.querySelector('.total-worked').textContent;
+                const overtime = row.querySelector('.overtime').textContent;
+                
+                // Extrai as cores de fundo para usar no PDF (opcional, mas adiciona contexto visual)
+                let fillColor = null;
+                if (row.classList.contains('is-sunday')) {
+                    fillColor = [254, 202, 202]; // red-200
+                } else if (row.classList.contains('is-national-holiday')) {
+                    fillColor = [254, 240, 138]; // yellow-200
+                } else if (row.classList.contains('is-municipal-holiday')) {
+                    fillColor = [191, 219, 254]; // blue-200
+                }
+                
+                tableBody.push({
+                    fillColor: fillColor,
+                    data: [
+                        dayDate, 
+                        dayOfWeek, 
+                        savedEntry.in1 || '', 
+                        savedEntry.out1 || '', 
+                        savedEntry.in2 || '', 
+                        savedEntry.out2 || '', 
+                        totalWorked,
+                        overtime
+                    ]
+                });
+            });
+
+            // 3. GERAÇÃO DA TABELA USANDO AUTOTABLE
+            pdf.autoTable({
+                startY: yOffset,
+                head: [tableHeaders],
+                body: tableBody.map(row => row.data),
+                margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
+                styles: { 
+                    fontSize: 8, 
+                    cellPadding: 2, 
+                    valign: 'middle', 
+                    halign: 'center' 
+                },
+                headStyles: { 
+                    fillColor: [30, 41, 59], // dark blue-gray
+                    textColor: 255, 
+                    fontStyle: 'bold' 
+                },
+                // Hook para aplicar as cores de fundo
+                didParseCell: function (data) {
+                    const rowIndex = data.row.index;
+                    if (rowIndex < tableBody.length && tableBody[rowIndex].fillColor) {
+                        data.cell.styles.fillColor = tableBody[rowIndex].fillColor;
+                        data.cell.styles.textColor = [0, 0, 0]; // Garante texto preto
+                    }
+                },
+                // Ajuste de largura das colunas (para caber na página A4)
+                columnStyles: {
+                    0: { cellWidth: 15 }, // Data
+                    1: { cellWidth: 10 }, // Dia
+                    2: { cellWidth: 20 }, // Ent. Manhã
+                    3: { cellWidth: 20 }, // Sai. Manhã
+                    4: { cellWidth: 20 }, // Ent. Tarde
+                    5: { cellWidth: 20 }, // Sai. Tarde
+                    6: { cellWidth: 20, fontStyle: 'bold' }, // Total Trab.
+                    7: { cellWidth: 20, fontStyle: 'bold' } // Hrs Extras
+                }
+            });
+
+            // 4. INSERE O TOTAL NO FINAL
+            yOffset = pdf.autoTable.previous.finalY + 10;
+            pdf.setFontSize(14);
+            pdf.setFont(undefined, 'bold');
+            
+            pdf.text(`Saldo Total de Horas Extras: ${totalOvertime}`, pageWidth - MARGIN, yOffset, { align: 'right' });
+            
+            // 5. SALVAR O ARQUIVO
+            pdf.save(`Planilha_Horas_Extras_${monthText}_${yearText}.pdf`);
+            
+            closeMessage();
         }
 
 
@@ -788,7 +784,8 @@
         }
 
         function populateSelectors() {
-            const yearOptions = [2025, 2026, 2027];
+            const currentYear = new Date().getFullYear();
+            const yearOptions = [currentYear, currentYear + 1, currentYear + 2];
             
             yearSelect.innerHTML = yearOptions.map(year => `<option value="${year}">Ano ${year}</option>`).join('');
 
@@ -804,11 +801,14 @@
             
             monthSelect.innerHTML = '';
             
+            const currentMonth = new Date().getMonth() + 1; // 1-12
+            const currentYear = new Date().getFullYear();
+
             let startMonth = 1; 
             let endMonth = 12; 
             
-            if (year === 2025) {
-                startMonth = 11; 
+            if (year === currentYear) {
+                startMonth = currentMonth; 
             } 
 
             for (let i = startMonth; i <= endMonth; i++) {
@@ -821,7 +821,7 @@
                 monthSelect.appendChild(option);
             }
 
-            let targetMonth = monthSelect.dataset.lastSelectedMonth || (year === 2025 ? 11 : 1);
+            let targetMonth = monthSelect.dataset.lastSelectedMonth || (year === currentYear ? currentMonth : 1);
             if (monthSelect.querySelector(`option[value="${targetMonth}"]`)) {
                  monthSelect.value = targetMonth;
             } else {
@@ -832,15 +832,21 @@
 
 
         function initApp() {
-            const lastYear = localStorage.getItem('lastSelectedYear') || 2025;
-            const lastMonth = localStorage.getItem('lastSelectedMonth') || 11;
+            const currentYear = new Date().getFullYear();
+            const currentMonth = new Date().getMonth() + 1;
+
+            const lastYear = localStorage.getItem('lastSelectedYear') || currentYear;
+            const lastMonth = localStorage.getItem('lastSelectedMonth') || currentMonth;
 
             populateSelectors(); 
 
             yearSelect.value = lastYear;
             updateMonthSelector(parseInt(lastYear, 10));
-            monthSelect.value = lastMonth;
-            monthSelect.dataset.lastSelectedMonth = lastMonth; 
+            
+            if (monthSelect.querySelector(`option[value="${lastMonth}"]`)) {
+                 monthSelect.value = lastMonth;
+            }
+            monthSelect.dataset.lastSelectedMonth = monthSelect.value; 
 
             yearSelect.addEventListener('change', (e) => {
                 const newYear = parseInt(e.target.value, 10);
