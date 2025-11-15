@@ -10,8 +10,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- 3. Adiciona SheetJS para exportar e AGORA IMPORTAR de XLSX -->
+    <!-- 3. Adiciona SheetJS para exportar/importar de XLSX -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- 4. ADICIONA BIBLIOTECAS PARA GERAÇÃO DE PDF BAIXÁVEL -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Usa a versão modular do jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
     <style>
         /* Estilos personalizados */
         body {
@@ -54,8 +59,6 @@
 
         /* Estilos de impressão (Otimizados para PDF) */
         @media print {
-            /* Regra de layout horizontal removida para evitar problemas */
-            
             body {
                 font-size: 10pt;
                 color: #000;
@@ -116,7 +119,7 @@
             <p class="text-lg text-gray-600 mt-1">Matheus Magalhães de Castro</p>
         </header>
 
-        <!-- Controles de Navegação (Escondidos na impressão) -->
+        <!-- Controles de Navegação (Escondidos na impressão e na captura do PDF) -->
         <nav class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 print-hidden space-y-4 md:space-y-0">
             
             <!-- Seletores de Data -->
@@ -144,9 +147,13 @@
                 <button onclick="exportToXLSX()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2 md:mb-0">
                     Exportar para XLSX
                 </button>
-                <!-- BOTÃO DE PDF SIMPLIFICADO -->
-                <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base">
-                    Salvar em PDF
+                <!-- NOVO BOTÃO PARA GERAR ARQUIVO PDF -->
+                <button onclick="generatePDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2 md:mb-0">
+                    Gerar Arquivo PDF
+                </button>
+                <!-- BOTÃO DE IMPRESSÃO (FUNÇÃO ANTIGA) -->
+                <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base">
+                    Imprimir Planilha
                 </button>
             </div>
         </nav>
@@ -177,25 +184,19 @@
     </div>
 
     <script type="text/javascript">
-        // Este código usa "localStorage" para salvar os dados no navegador.
         
         let currentMonthData = {};
         
         const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-        // Horas base em MINUTOS
         const HORA_BASE_SEMANA = 8 * 60; 
         const HORA_BASE_SABADO = 4 * 60; 
         const HORA_BASE_DOMINGO = 0;
         const HORA_BASE_FERIADO = 0;
 
-        // --- DADOS DOS FERIADOS MUNICIPAIS (PIRACANJUBA, GO: 15 DE AGOSTO) ---
-        // Usamos um objeto para checagem rápida no formato MM-DD
         const MUNICIPAL_HOLIDAYS = {
             '08-15': "Nossa Senhora D'Abadia (Padroeira do Município)" 
         };
-        // --- FIM Feriados Municipais ---
-
-        const holidaysCache = {}; // Cache para feriados nacionais (API)
+        const holidaysCache = {}; 
         
         // Elementos da DOM
         const yearSelect = document.getElementById('year-select');
@@ -204,14 +205,20 @@
         const sheetFooter = document.getElementById('sheet-footer');
         const messageContainer = document.getElementById('message-container');
         const messageText = document.getElementById('message-text');
+        const messageActionButton = document.getElementById('message-action-button');
 
 
-        // --- MENSAGEM SIMPLIFICADA (USADA PARA ERROS DE IMPORTAÇÃO) ---
-        function showMessage(text) {
+        // --- FUNÇÕES DE MENSAGEM ---
+        function showMessage(text, buttonText = "OK", showButton = true) {
             messageText.textContent = text;
-            const button = document.getElementById('message-action-button');
-            button.textContent = "OK";
-            button.onclick = window.closeMessage; 
+            messageActionButton.textContent = buttonText;
+            messageActionButton.onclick = closeMessage; 
+
+            if (showButton) {
+                messageActionButton.classList.remove('hidden');
+            } else {
+                messageActionButton.classList.add('hidden');
+            }
 
             messageContainer.classList.remove('hidden');
             messageContainer.classList.add('flex');
@@ -222,13 +229,65 @@
             messageContainer.classList.remove('flex');
         }
 
-        // --- CHAVE DE ARMAZENAMENTO LOCAL ---
+        // --- GERAÇÃO DE PDF (FUNÇÃO NOVA) ---
+        window.generatePDF = async function() {
+            if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined') {
+                showMessage("As bibliotecas de geração de PDF não foram carregadas. A função falhou.");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const mainContent = document.querySelector('.print-container');
+            
+            // 1. Mostrar loading sem botão
+            showMessage("Gerando PDF... Por favor, aguarde.", "...", false); 
+
+            // 2. Esconder elementos de controle antes da captura
+            const hiddenElements = document.querySelectorAll('.print-hidden');
+            hiddenElements.forEach(el => el.style.display = 'none');
+            
+            try {
+                // 3. Capturar o conteúdo principal usando html2canvas
+                const canvas = await html2canvas(mainContent, { 
+                    scale: 2, // Aumenta a resolução
+                    logging: false,
+                    useCORS: true 
+                });
+
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                // Define o PDF em modo Paisagem (Landscape) A4
+                const pdf = new jsPDF('l', 'mm', 'a4'); 
+                
+                const pdfWidth = 297; // Largura A4 paisagem em mm
+                const pdfHeight = 210; // Altura A4 paisagem em mm
+                
+                const imgHeight = canvas.height * pdfWidth / canvas.width;
+
+                // 4. Adicionar a imagem do canvas ao PDF
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+
+                // 5. Salvar o arquivo
+                const monthText = monthSelect.options[monthSelect.selectedIndex].text;
+                const yearText = yearSelect.value;
+                pdf.save(`Planilha_Horas_Infocus_${monthText}_${yearText}.pdf`);
+                
+            } catch (error) {
+                console.error("Erro ao gerar o PDF:", error);
+                showMessage("Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.");
+            } finally {
+                // 6. Voltar a mostrar os elementos de controle e fechar o loading
+                hiddenElements.forEach(el => el.style.display = ''); 
+                closeMessage();
+            }
+        }
+
+
+        // --- LÓGICA DE PERSISTÊNCIA (SAVE/LOAD) USANDO localStorage (MANTIDA) ---
+
         const getLocalStorageKey = (year, month) => {
             const monthId = `${year}-${String(month).padStart(2, '0')}`;
             return `infocus_timesheet_${monthId}`;
         };
-
-        // --- LÓGICA DE PERSISTÊNCIA (SAVE/LOAD) USANDO localStorage ---
 
         let saveTimeout;
         function debounce(func, timeout = 1000) {
@@ -259,11 +318,8 @@
 
         function saveDailyEntry(year, month, day, entryData) {
             const key = getLocalStorageKey(year, month);
-            
-            // Atualiza o estado local antes de salvar
             currentMonthData[day] = entryData;
             
-            // Salva no LocalStorage
             try {
                 localStorage.setItem(key, JSON.stringify(currentMonthData));
             } catch (e) {
@@ -272,22 +328,18 @@
         }
         const debouncedSave = debounce(saveDailyEntry, 1000); 
 
-        // Função auxiliar para salvar o objeto de dados completo para um mês/ano específico
         function saveFullMonthData(year, month, dataObject) {
             const key = getLocalStorageKey(year, month);
             try {
                 localStorage.setItem(key, JSON.stringify(dataObject));
-                currentMonthData = dataObject; // Atualiza o estado da memória
+                currentMonthData = dataObject; 
             } catch (e) {
                 console.error("Erro ao salvar dados completos no localStorage:", e);
             }
         }
 
-        // --- FUNÇÕES DE UTILIADDE E CÁLCULO (NO BROWSER) ---
+        // --- FUNÇÕES DE UTILIADDE E CÁLCULO (MANTIDA) ---
 
-        /**
-         * Converte string "HH:MM" para minutos.
-         */
         function parseTime(timeStr) {
             if (!timeStr) return 0;
             try {
@@ -298,15 +350,10 @@
             }
         }
 
-        /**
-         * Converte minutos para string "HH:MM" (com sinal opcional).
-         */
         function formatMinutes(totalMinutes, showSign = false) {
-            if (isNaN(totalMinutes) || totalMinutes === 0) {
-                return "00:00";
-            }
-            
-            const sign = totalMinutes < 0 ? "-" : "+";
+            if (isNaN(totalMinutes)) totalMinutes = 0;
+
+            const sign = totalMinutes < 0 ? "-" : (showSign ? "+" : "");
             const absMinutes = Math.abs(totalMinutes);
             
             const hours = Math.floor(absMinutes / 60);
@@ -315,12 +362,9 @@
             const hStr = hours.toString().padStart(2, '0');
             const mStr = minutes.toString().padStart(2, '0');
             
-            return (showSign ? sign : "") + `${hStr}:${mStr}`;
+            return sign + `${hStr}:${mStr}`;
         }
 
-        /**
-         * Calcula o total trabalhado e horas extras para uma única linha (dia) no BROWSER.
-         */
         function calculateRow(row, shouldSave = false) {
             const inputs = {
                 in1: row.querySelector('[data-col="in1"]').value,
@@ -350,14 +394,12 @@
                  overtimeMinutes = totalWorkedMinutes - baseMinutes;
             }
 
-            // Atualiza a DOM da linha
             const totalWorkedCell = row.querySelector('.total-worked');
             const overtimeCell = row.querySelector('.overtime');
 
             totalWorkedCell.textContent = formatMinutes(totalWorkedMinutes, false);
             overtimeCell.textContent = formatMinutes(overtimeMinutes, true);
 
-            // Atualiza cores baseado no resultado
             overtimeCell.classList.remove('text-green-600', 'text-red-600', 'text-gray-700');
             if (overtimeMinutes > 0) {
                 overtimeCell.classList.add('text-green-600');
@@ -367,7 +409,6 @@
                 overtimeCell.classList.add('text-gray-700');
             }
             
-            // Lógica de SALVAR
             if (shouldSave) {
                 const rowId = row.id.replace('row-', '');
                 const day = parseInt(rowId, 10);
@@ -381,17 +422,12 @@
                     out2: inputs.out2,
                 };
                 
-                // Dispara o save com debounce
                 debouncedSave(year, month, day, entryData);
             }
             
-            // Recalcula o totalizador do mês após atualizar a linha
             updateTotalOvertime();
         }
 
-        /**
-         * Soma todas as horas extras do mês e atualiza o rodapé.
-         */
         function updateTotalOvertime() {
             let totalMonthOvertime = 0;
             
@@ -412,7 +448,6 @@
             const totalCell = document.getElementById('total-overtime');
             totalCell.textContent = formatMinutes(totalMonthOvertime, true);
 
-            // Atualiza cores do total
             totalCell.classList.remove('text-green-600', 'text-red-600', 'text-gray-900');
             if (totalMonthOvertime > 0) {
                 totalCell.classList.add('text-green-600');
@@ -423,7 +458,7 @@
             }
         }
 
-        // --- FUNÇÃO DE EXPORTAÇÃO XLSX ---
+        // --- FUNÇÃO DE EXPORTAÇÃO XLSX (MANTIDA) ---
         window.exportToXLSX = function() {
             if (typeof XLSX === 'undefined') {
                 console.error("SheetJS (XLSX) não foi carregado. A exportação falhou.");
@@ -437,17 +472,15 @@
 
             const aoaData = [];
             
-            // Excel: Linha 1 (Título e Mês/Ano)
             aoaData.push(["Planilha de Horas Extras - Estúdio Infocus", "", monthYear]); 
             aoaData.push([]); 
             
-            // Excel: Linha 3 (Cabeçalho da Tabela)
             aoaData.push([
                 "Data", "Dia", "Entrada Mat.", "Saída Mat.", "Entrada Vesp.", "Saída Vesp.", 
                 "Total Trabalhado", "Horas Extras", "Base Diária (Min)"
             ]); 
 
-            let excelRow = 4; // Dados na linha 5 do Excel
+            let excelRow = 4; 
 
             tableBody.querySelectorAll('tr').forEach(row => {
                 const baseMinutes = row.dataset.baseMinutes;
@@ -456,13 +489,11 @@
                 const dateCell = row.cells[0].textContent;
                 const dayOfWeekCell = row.cells[1].textContent;
                 
-                // Pega os dados brutos salvos no localStorage para garantir que a exportação está correta
                 const in1 = currentMonthData[dayIndex]?.in1 || '';
                 const out1 = currentMonthData[dayIndex]?.out1 || '';
                 const in2 = currentMonthData[dayIndex]?.in2 || '';
                 const out2 = currentMonthData[dayIndex]?.out2 || '';
 
-                // FÓRMULAS NATIVAS DO EXCEL
                 const totalWorkedFormula = `=(D${excelRow}-C${excelRow})+(F${excelRow}-E${excelRow})`;
                 const overtimeFormula = `=G${excelRow}-(I${excelRow}/1440)`;
 
@@ -473,14 +504,13 @@
                     out1, 
                     in2, 
                     out2, 
-                    { f: totalWorkedFormula, t: 'n' }, // Coluna G: Total Trabalhado (Formato: [h]:mm)
-                    { f: overtimeFormula, t: 'n' },    // Coluna H: Horas Extras (Formato: Sinal HH:MM)
-                    Number(baseMinutes)                 // Coluna I: Base em Minutos
+                    { f: totalWorkedFormula, t: 'n' }, 
+                    { f: overtimeFormula, t: 'n' },    
+                    Number(baseMinutes)                 
                 ]);
                 excelRow++;
             });
             
-            // Totalizador
             const totalRow = excelRow + 1; 
             const totalOvertimeFormula = `=SUM(H5:H${excelRow - 1})`;
 
@@ -493,37 +523,31 @@
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Planilha Horas");
 
-            // Aplica formatação de largura e tempo nas colunas
             worksheet['!cols'] = [
                 {wch: 10}, {wch: 5}, {wch: 14}, {wch: 14}, {wch: 16}, {wch: 16}, {wch: 15}, {wch: 15}, {wch: 15}
             ];
 
             for (let i = 5; i < excelRow; i++) {
-                // Formato de tempo
                 if (worksheet[`G${i}`]) worksheet[`G${i}`].z = '[h]:mm';
                 if (worksheet[`H${i}`]) worksheet[`H${i}`].z = '+[h]:mm;[Red]-[h]:mm;0';
                 for (const col of ['C', 'D', 'E', 'F']) {
-                    // C, D, E, F são campos de entrada de hora no formato HH:MM
                     if (worksheet[`${col}${i}`]) worksheet[`${col}${i}`].z = 'HH:MM'; 
                 }
             }
 
-            // Formato do totalizador
             if (worksheet[`H${totalRow + 1}`]) {
                 worksheet[`H${totalRow + 1}`].z = '+[h]:mm;[Red]-[h]:mm;0';
             }
             
-            // Limpa o dado do Mês/Ano para ser apenas o texto, já que estava usando o índice 2 do array da linha 1
             if(worksheet['C1']) {
                  worksheet['C1'].t = 's';
                  worksheet['C1'].v = monthYear;
             }
 
-
             XLSX.writeFile(workbook, `Planilha_Horas_Infocus_${monthText}${yearText}.xlsx`);
         }
 
-        // --- FUNÇÃO DE IMPORTAÇÃO XLSX ---
+        // --- FUNÇÃO DE IMPORTAÇÃO XLSX (MANTIDA) ---
         window.handleFileImport = function(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -534,11 +558,9 @@
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
 
-                    // Assume que a planilha de dados é a primeira
                     const sheetName = workbook.SheetNames[0];
                     const ws = workbook.Sheets[sheetName];
                     
-                    // Converte para array de arrays (raw data)
                     const importedData = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
 
                     processImportedData(importedData);
@@ -547,14 +569,12 @@
                     console.error("Erro ao processar o arquivo XLSX:", error);
                     showMessage("Erro ao processar o arquivo. Certifique-se de que é um arquivo .xlsx válido.");
                 }
-                // Limpa o input de arquivo para permitir a re-seleção do mesmo arquivo
                 event.target.value = ''; 
             };
             reader.readAsArrayBuffer(file);
         }
 
         function processImportedData(data) {
-            // 1. Extrair Mês/Ano do cabeçalho (Linha 1, Coluna C - índice 0, 2)
             const monthYearHeader = data[0] && data[0][2] ? data[0][2] : null;
             if (!monthYearHeader || !monthYearHeader.includes('/')) {
                 return showMessage("Formato de arquivo inválido. Não foi possível encontrar o Mês/Ano no cabeçalho (C1).");
@@ -570,22 +590,18 @@
                 return showMessage("Mês/Ano inválido no arquivo. Certifique-se de que está no formato 'NomeDoMês/AAAA'.");
             }
 
-            // 2. Coletar novos dados
             const newMonthData = {};
             let isDataFound = false;
 
-            // Os dados da planilha começam no índice 3 (Linha 5 do Excel)
             for (let i = 3; i < data.length; i++) {
                 const row = data[i];
-                if (!row || !row[0]) continue; // Pula linhas vazias
+                if (!row || !row[0]) continue; 
 
-                // Coluna A (Data - índice 0) deve ser "DD/MM"
                 const datePart = row[0].split('/')[0]; 
                 const day = parseInt(datePart, 10);
 
                 if (isNaN(day) || day < 1 || day > 31) continue;
 
-                // Colunas C, D, E, F (índices 2, 3, 4, 5) contêm as horas
                 const in1 = row[2] || '';
                 const out1 = row[3] || '';
                 const in2 = row[4] || '';
@@ -601,31 +617,27 @@
                  return showMessage("Nenhum dado de horário válido foi encontrado no arquivo.");
             }
 
-            // 3. Atualizar Seletores e Salvar
             yearSelect.value = year;
-            updateMonthSelector(year); // Garantir que os meses do ano correto estão visíveis
+            updateMonthSelector(year); 
             monthSelect.value = month;
 
-            // Salva os dados importados no localStorage
             saveFullMonthData(year, month, newMonthData);
             
-            // Recarrega a planilha para refletir os novos dados
             generateMonthSheet(year, month); 
             
             showMessage(`Dados de ${monthName}/${year} importados com sucesso!`);
         }
 
 
-        // --- GERAÇÃO DA PLANILHA (VISUAL NO BROWSER) ---
+        // --- GERAÇÃO DA PLANILHA (MANTIDA) ---
 
         async function generateMonthSheet(year, month) {
-            // Se ano ou mês não estiverem selecionados, não faz nada
             if (!year || !month) return;
 
             sheetContainer.innerHTML = '<p class="text-center py-10 text-xl font-medium text-blue-600">Carregando feriados nacionais...</p>';
             sheetFooter.innerHTML = '';
 
-            const nationalHolidayDates = await fetchHolidays(year); // Feriados Nacionais
+            const nationalHolidayDates = await fetchHolidays(year);
             const daysInMonth = new Date(year, month, 0).getDate();
             
             const savedData = loadMonthData(year, month);
@@ -650,8 +662,8 @@
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = new Date(year, month - 1, day);
                 const dayOfWeek = date.getDay(); 
-                const dateStringISO = date.toISOString().split('T')[0]; // YYYY-MM-DD
-                const dateStringMD = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`; // MM-DD
+                const dateStringISO = date.toISOString().split('T')[0]; 
+                const dateStringMD = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`; 
                 
                 const dayKey = day.toString();
                 const savedEntry = savedData[dayKey] || {}; 
@@ -659,20 +671,19 @@
                 const isSunday = dayOfWeek === 0;
                 const isSaturday = dayOfWeek === 6;
                 const isNationalHoliday = nationalHolidayDates.has(dateStringISO);
-                const isMunicipalHoliday = MUNICIPAL_HOLIDAYS.hasOwnProperty(dateStringMD); // Checa o feriado municipal (15/08)
+                const isMunicipalHoliday = MUNICIPAL_HOLIDAYS.hasOwnProperty(dateStringMD); 
 
                 let rowClass = 'text-center';
                 let baseMinutes = HORA_BASE_SEMANA; 
 
-                // Prioridade de Cores: Domingo > Municipal > Nacional > Sábado > Normal
                 if (isSunday) {
                     rowClass += ' is-sunday'; 
                     baseMinutes = HORA_BASE_DOMINGO; 
                 } else if (isMunicipalHoliday) {
-                    rowClass += ' is-municipal-holiday'; // Classe Azul
+                    rowClass += ' is-municipal-holiday'; 
                     baseMinutes = HORA_BASE_FERIADO; 
                 } else if (isNationalHoliday) {
-                    rowClass += ' is-national-holiday'; // Classe Amarela
+                    rowClass += ' is-national-holiday'; 
                     baseMinutes = HORA_BASE_FERIADO; 
                 } else if (isSaturday) {
                     baseMinutes = HORA_BASE_SABADO; 
@@ -699,7 +710,6 @@
             tableHtml += `</tbody></table>`;
             sheetContainer.innerHTML = tableHtml;
 
-            // Gera o rodapé com o totalizador
             sheetFooter.innerHTML = `
                 <div class="flex justify-end">
                     <div class="flex items-center space-x-4">
@@ -709,28 +719,25 @@
                 </div>
             `;
 
-            // RECALCULA E ATUALIZA TUDO APÓS CARREGAR OS DADOS
             document.querySelectorAll('#sheet-body tr').forEach(row => {
-                calculateRow(row, false); // Não salva, apenas calcula
+                calculateRow(row, false); 
             });
             updateTotalOvertime();
 
-            // Adiciona listeners de evento 
             document.querySelectorAll('.time-input').forEach(input => {
                 input.addEventListener('input', (e) => {
                     const row = e.target.closest('tr');
-                    calculateRow(row, true); // O 'true' indica que o cálculo deve acionar o salvamento local
+                    calculateRow(row, true); 
                 });
             });
         }
 
-        // --- FUNÇÕES DE NAVEGAÇÃO E UTILS ---
+        // --- FUNÇÕES DE NAVEGAÇÃO E UTILS (MANTIDA) ---
 
         async function fetchHolidays(year) {
             if (holidaysCache[year]) {
                 return holidaysCache[year];
             }
-            // Retentativas para API
             try {
                 const maxRetries = 3;
                 let lastError = null;
@@ -757,24 +764,15 @@
             }
         }
 
-
-        /**
-         * Popula o seletor de anos e o seletor de meses inicial.
-         */
         function populateSelectors() {
             const yearOptions = [2025, 2026, 2027];
             
-            // 1. Popula Seletor de Anos
             yearSelect.innerHTML = yearOptions.map(year => `<option value="${year}">Ano ${year}</option>`).join('');
 
-            // 2. Popula Seletor de Meses (inicia com o primeiro ano da lista)
             const initialYear = parseInt(yearSelect.value, 10);
             updateMonthSelector(initialYear);
         }
 
-        /**
-         * Atualiza as opções do seletor de meses baseado no ano selecionado.
-         */
         function updateMonthSelector(year) {
             const monthNames = [
                 "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -783,14 +781,12 @@
             
             monthSelect.innerHTML = '';
             
-            // Define o intervalo de meses baseado no ano
             let startMonth = 1; 
             let endMonth = 12; 
             
             if (year === 2025) {
-                startMonth = 11; // Começa em Novembro
+                startMonth = 11; 
             } 
-            // 2026 e 2027 cobrem o ano inteiro (startMonth=1, endMonth=12)
 
             for (let i = startMonth; i <= endMonth; i++) {
                 const monthValue = i.toString();
@@ -802,7 +798,6 @@
                 monthSelect.appendChild(option);
             }
 
-            // Tenta selecionar o mês que estava ativo, ou um padrão
             let targetMonth = monthSelect.dataset.lastSelectedMonth || (year === 2025 ? 11 : 1);
             if (monthSelect.querySelector(`option[value="${targetMonth}"]`)) {
                  monthSelect.value = targetMonth;
@@ -813,33 +808,26 @@
         }
 
 
-        /**
-         * Inicializa a aplicação e define os listeners.
-         */
         function initApp() {
-            // Tenta pegar o último mês selecionado do localStorage para manter a seleção na recarga
             const lastYear = localStorage.getItem('lastSelectedYear') || 2025;
             const lastMonth = localStorage.getItem('lastSelectedMonth') || 11;
 
             populateSelectors(); 
 
-            // Define os seletores com os últimos valores ou padrões
             yearSelect.value = lastYear;
             updateMonthSelector(parseInt(lastYear, 10));
             monthSelect.value = lastMonth;
-            monthSelect.dataset.lastSelectedMonth = lastMonth; // Guarda o último mês selecionado
+            monthSelect.dataset.lastSelectedMonth = lastMonth; 
 
-            // Listener para mudança de ANO
             yearSelect.addEventListener('change', (e) => {
                 const newYear = parseInt(e.target.value, 10);
                 localStorage.setItem('lastSelectedYear', newYear);
-                updateMonthSelector(newYear); // Atualiza os meses
+                updateMonthSelector(newYear); 
                 const month = parseInt(monthSelect.value, 10);
                 localStorage.setItem('lastSelectedMonth', month);
                 generateMonthSheet(newYear, month);
             });
 
-            // Listener para mudança de MÊS
             monthSelect.addEventListener('change', (e) => {
                 const year = parseInt(yearSelect.value, 10);
                 const newMonth = parseInt(e.target.value, 10);
@@ -848,17 +836,13 @@
                 generateMonthSheet(year, newMonth);
             });
 
-            // Carrega a planilha inicial 
             const initialYear = parseInt(yearSelect.value, 10);
             const initialMonth = parseInt(monthSelect.value, 10);
             generateMonthSheet(initialYear, initialMonth);
         }
 
-        // Execução Inicial
         initApp(); 
 
     </script>
 </body>
-</body>
 </html>
-
