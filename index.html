@@ -54,6 +54,8 @@
 
         /* Estilos de impressão (Otimizados para PDF) */
         @media print {
+            /* Regra de layout horizontal removida para evitar problemas */
+            
             body {
                 font-size: 10pt;
                 color: #000;
@@ -142,8 +144,9 @@
                 <button onclick="exportToXLSX()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2 md:mb-0">
                     Exportar para XLSX
                 </button>
+                <!-- BOTÃO DE PDF SIMPLIFICADO -->
                 <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base">
-                    Exportar para PDF
+                    Salvar em PDF
                 </button>
             </div>
         </nav>
@@ -152,7 +155,7 @@
         <div id="message-container" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center print-hidden z-50">
             <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
                 <p id="message-text" class="text-lg font-medium text-gray-700 mb-4"></p>
-                <button onclick="closeMessage()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">
+                <button id="message-action-button" onclick="closeMessage()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">
                     OK
                 </button>
             </div>
@@ -202,9 +205,14 @@
         const messageContainer = document.getElementById('message-container');
         const messageText = document.getElementById('message-text');
 
-        // --- MENSAGEM (NOVO) ---
+
+        // --- MENSAGEM SIMPLIFICADA (USADA PARA ERROS DE IMPORTAÇÃO) ---
         function showMessage(text) {
             messageText.textContent = text;
+            const button = document.getElementById('message-action-button');
+            button.textContent = "OK";
+            button.onclick = window.closeMessage; 
+
             messageContainer.classList.remove('hidden');
             messageContainer.classList.add('flex');
         }
@@ -213,7 +221,6 @@
             messageContainer.classList.add('hidden');
             messageContainer.classList.remove('flex');
         }
-
 
         // --- CHAVE DE ARMAZENAMENTO LOCAL ---
         const getLocalStorageKey = (year, month) => {
@@ -516,7 +523,7 @@
             XLSX.writeFile(workbook, `Planilha_Horas_Infocus_${monthText}${yearText}.xlsx`);
         }
 
-        // --- FUNÇÃO DE IMPORTAÇÃO XLSX (NOVO) ---
+        // --- FUNÇÃO DE IMPORTAÇÃO XLSX ---
         window.handleFileImport = function(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -852,4 +859,6 @@
 
     </script>
 </body>
+</body>
 </html>
+
