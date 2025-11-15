@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planilha de Horas Extras - Estúdio Infocus</title>
+    <!-- 1. Carrega o Tailwind CSS para estilização -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. Carrega a fonte Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- 3. Adiciona SheetJS para exportar para XLSX -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* Estilos personalizados */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Centraliza o texto dentro dos inputs de hora */
+        input[type="time"] {
+            text-align: center;
+            border: 1px solid #e2e8f0; /* borda sutil */
+            border-radius: 0.375rem; /* rounded-md */
+            padding: 0.25rem;
+            width: 100px; /* Largura fixa para inputs de hora */
+        }
+        
+        /* Remove setas do input de hora no Chrome/Safari */
+        input[type="time"]::-webkit-calendar-picker-indicator {
+            display: none;
+            background: none;
+        }
+
+        /* Estilos de impressão */
+        @media print {
+            body {
+                font-size: 10pt;
+                color: #000;
+                background-color: #fff;
+            }
+            /* Esconde a navegação ao imprimir */
+            .print-hidden {
+                display: none;
+            }
+            /* Garante que o container da planilha ocupe a largura total */
+            .print-container {
+                width: 100%;
+                max-width: 100%;
+                padding: 0;
+                margin: 0;
+                box-shadow: none;
+                border: none;
+            }
+            /* Remove bordas e sombras da tabela na impressão */
+            table {
+                border-collapse: collapse;
+                width: 100%;
+                box-shadow: none;
+            }
+            th, td {
+                border: 1px solid #ccc !important;
+                padding: 4px 6px;
+                color: #000;
+                background-color: #fff !important; /* Remove cores de fundo */
+            }
+            /* Re-aplica cores de fundo específicas se necessário */
+            .is-sunday td {
+                background-color: #fde8e8 !important; /* Vermelho claro para domingos */
+                -webkit-print-color-adjust: exact;
+                color-adjust: exact;
+            }
+            .is-holiday td {
+                background-color: #fef9c3 !important; /* Amarelo claro para feriados */
+                -webkit-print-color-adjust: exact;
+                color-adjust: exact;
+            }
+            /* Garante que os inputs de hora sejam legíveis */
+            input[type="time"] {
+                border: none;
+                padding: 0;
+                width: auto;
+                background-color: transparent !important;
+                text-align: center;
+            }
+            /* Esconde o valor padrão se não preenchido */
+            input[type="time"]:invalid {
+                color: #000;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 sm:p-8">
+
+    <div class="max-w-7xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-lg print-container">
+        
+        <!-- Cabeçalho -->
+        <header class="text-center mb-6 border-b pb-6">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Estúdio Infocus</h1>
+            <h2 class="text-xl sm:text-2xl font-semibold text-gray-700 mt-2">Planilha de Horas Extras</h2>
+            <p class="text-lg text-gray-600 mt-1">Matheus Magalhães de Castro</p>
+        </header>
+
+        <!-- Controles de Navegação (Escondidos na impressão) -->
+        <nav class="flex flex-col sm:flex-row justify-between items-center mb-6 print-hidden">
+            <div class="flex items-center space-x-4 mb-4 sm:mb-0">
+                <label for="month-select" class="text-lg font-medium text-gray-700">Mês / Ano:</label>
+                <select id="month-select" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-lg">
+                    <!-- Opções serão geradas pelo JavaScript -->
+                </select>
+            </div>
+            
+            <!-- Botões de Ação -->
+            <div class="flex space-x-4">
+                <button onclick="exportToXLSX()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-200">
+                    Exportar para XLSX
+                </button>
+                <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-200">
+                    Imprimir Mês
+                </button>
+            </div>
+        </nav>
+
+        <!-- Container da Planilha -->
+        <div id="sheet-container" class="overflow-x-auto">
+            <p class="text-center py-10 text-xl font-medium text-blue-600">Carregando dados do navegador...</p>
+        </div>
+
+        <!-- Rodapé com Totais -->
+        <div id="sheet-footer" class="mt-6 border-t pt-4">
+            <!-- Totalizador será inserido aqui -->
+        </div>
+
+        <footer class="text-center text-xs text-gray-400 mt-8 print-hidden">
+            Feriados nacionais (Brasil) fornecidos por BrasilAPI.
+        </footer>
+    </div>
+
+    <script type="text/javascript">
+        // Este código usa "localStorage" para salvar os dados diretamente no seu navegador.
+        // Os dados SÓ estarão disponíveis no mesmo navegador e computador em que foram inseridos.
+        
+        let currentMonthData = {};
+        
+        const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+        // Horas base em MINUTOS
+        const HORA_BASE_SEMANA = 8 * 60; // 8 horas (480 minutos)
+        const HORA_BASE_SABADO = 4 * 60; // 4 horas (240 minutos)
+        const HORA_BASE_DOMINGO = 0;
+        const HORA_BASE_FERIADO = 0;
+
+        const holidaysCache = {};
+        
+        // Elementos da DOM
+        const monthSelect = document.getElementById('month-select');
+        const sheetContainer = document.getElementById('sheet-container');
+        const sheetFooter = document.getElementById('sheet-footer');
+
+        // --- CHAVE DE ARMAZENAMENTO LOCAL ---
+        const getLocalStorageKey = (year, month) => {
+            const monthId = `${year}-${String(month).padStart(2, '0')}`;
+            return `infocus_timesheet_${monthId}`;
+        };
+
+        // --- LÓGICA DE PERSISTÊNCIA (SAVE/LOAD) USANDO localStorage ---
+
+        /**
+         * Função de Debounce para limitar saves (evita sobrecarga do navegador)
+         */
+        let saveTimeout;
+        function debounce(func, timeout = 1000) {
+            return (...args) => {
+                clearTimeout(saveTimeout);
+                saveTimeout = setTimeout(() => { func.apply(this, args); }, timeout);
+            };
+        }
+
+        function loadMonthData(year, month) {
+            const key = getLocalStorageKey(year, month);
+            const savedJson = localStorage.getItem(key);
+            
+            if (savedJson) {
+                try {
+                    currentMonthData = JSON.parse(savedJson);
+                    return currentMonthData;
+                } catch (e) {
+                    console.error("Erro ao carregar dados do localStorage:", e);
+                    currentMonthData = {};
+                    return {};
+                }
+            } else {
+                currentMonthData = {};
+                return {};
+            }
+        }
+
+        function saveDailyEntry(year, month, day, entryData) {
+            const key = getLocalStorageKey(year, month);
+            
+            // Atualiza o estado local antes de salvar
+            currentMonthData[day] = entryData;
+            
+            // Salva no LocalStorage
+            try {
+                localStorage.setItem(key, JSON.stringify(currentMonthData));
+            } catch (e) {
+                console.error("Erro ao salvar no localStorage:", e);
+            }
+        }
+        const debouncedSave = debounce(saveDailyEntry, 1000); // Salva após 1 segundo de inatividade
+
+        // --- FUNÇÕES DE UTILIADDE E CÁLCULO (NO BROWSER) ---
+
+        /**
+         * Converte string "HH:MM" para minutos.
+         */
+        function parseTime(timeStr) {
+            if (!timeStr) return 0;
+            try {
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return (hours * 60) + minutes;
+            } catch (e) {
+                return 0;
+            }
+        }
+
+        /**
+         * Converte minutos para string "HH:MM" (com sinal opcional).
+         */
+        function formatMinutes(totalMinutes, showSign = false) {
+            if (isNaN(totalMinutes) || totalMinutes === 0) {
+                return "00:00";
+            }
+            
+            const sign = totalMinutes < 0 ? "-" : "+";
+            const absMinutes = Math.abs(totalMinutes);
+            
+            const hours = Math.floor(absMinutes / 60);
+            const minutes = Math.round(absMinutes % 60);
+
+            const hStr = hours.toString().padStart(2, '0');
+            const mStr = minutes.toString().padStart(2, '0');
+            
+            return (showSign ? sign : "") + `${hStr}:${mStr}`;
+        }
+
+        /**
+         * Calcula o total trabalhado e horas extras para uma única linha (dia) no BROWSER.
+         */
+        function calculateRow(row, shouldSave = false) {
+            const inputs = {
+                in1: row.querySelector('[data-col="in1"]').value,
+                out1: row.querySelector('[data-col="out1"]').value,
+                in2: row.querySelector('[data-col="in2"]').value,
+                out2: row.querySelector('[data-col="out2"]').value,
+            };
+
+            const minIn1 = parseTime(inputs.in1);
+            const minOut1 = parseTime(inputs.out1);
+            const minIn2 = parseTime(inputs.in2);
+            const minOut2 = parseTime(inputs.out2);
+
+            let totalWorkedMinutes = 0;
+
+            // Calcula período da manhã
+            if (minOut1 > minIn1) {
+                totalWorkedMinutes += (minOut1 - minIn1);
+            }
+            // Calcula período da tarde
+            if (minOut2 > minIn2) {
+                totalWorkedMinutes += (minOut2 - minIn2);
+            }
+            
+            const baseMinutes = parseInt(row.dataset.baseMinutes, 10);
+            let overtimeMinutes = 0;
+
+            if (totalWorkedMinutes > 0) {
+                 overtimeMinutes = totalWorkedMinutes - baseMinutes;
+            }
+
+            // Atualiza a DOM da linha
+            const totalWorkedCell = row.querySelector('.total-worked');
+            const overtimeCell = row.querySelector('.overtime');
+
+            totalWorkedCell.textContent = formatMinutes(totalWorkedMinutes, false);
+            overtimeCell.textContent = formatMinutes(overtimeMinutes, true);
+
+            // Atualiza cores baseado no resultado
+            overtimeCell.classList.remove('text-green-600', 'text-red-600', 'text-gray-700');
+            if (overtimeMinutes > 0) {
+                overtimeCell.classList.add('text-green-600');
+            } else if (overtimeMinutes < 0) {
+                overtimeCell.classList.add('text-red-600');
+            } else {
+                overtimeCell.classList.add('text-gray-700');
+            }
+            
+            // Lógica de SALVAR
+            if (shouldSave) {
+                const rowId = row.id.replace('row-', '');
+                const day = parseInt(rowId, 10);
+                const [year, month] = monthSelect.value.split('-').map(Number);
+                
+                const entryData = {
+                    in1: inputs.in1,
+                    out1: inputs.out1,
+                    in2: inputs.in2,
+                    out2: inputs.out2,
+                };
+                
+                // Dispara o save com debounce
+                debouncedSave(year, month, day, entryData);
+            }
+            
+            // Recalcula o totalizador do mês após atualizar a linha
+            updateTotalOvertime();
+        }
+
+        /**
+         * Soma todas as horas extras do mês e atualiza o rodapé.
+         */
+        function updateTotalOvertime() {
+            let totalMonthOvertime = 0;
+            
+            // Garante que o cálculo seja refeito lendo os valores da DOM atualizados
+            document.querySelectorAll('#sheet-body tr').forEach(row => {
+                 const overtimeCell = row.querySelector('.overtime');
+                 const timeStr = overtimeCell.textContent;
+
+                if (timeStr === "00:00") return;
+
+                const sign = timeStr.startsWith('-') ? -1 : 1;
+                const [hours, minutes] = timeStr.replace(/[-+]/, '').split(':').map(Number);
+                
+                if (!isNaN(hours) && !isNaN(minutes)) {
+                    totalMonthOvertime += (hours * 60 + minutes) * sign;
+                }
+            });
+
+            const totalCell = document.getElementById('total-overtime');
+            totalCell.textContent = formatMinutes(totalMonthOvertime, true);
+
+            // Atualiza cores do total
+            totalCell.classList.remove('text-green-600', 'text-red-600', 'text-gray-900');
+            if (totalMonthOvertime > 0) {
+                totalCell.classList.add('text-green-600');
+            } else if (totalMonthOvertime < 0) {
+                totalCell.classList.add('text-red-600');
+            } else {
+                totalCell.classList.add('text-gray-900');
+            }
+        }
+
+        // --- FUNÇÃO DE EXPORTAÇÃO XLSX (COM FÓRMULAS) ---
+
+        window.exportToXLSX = function() {
+            if (typeof XLSX === 'undefined') {
+                console.error("SheetJS (XLSX) não foi carregado. A exportação falhou.");
+                return;
+            }
+
+            const tableBody = document.getElementById('sheet-body');
+            const monthText = monthSelect.options[monthSelect.selectedIndex].text;
+            const monthYear = monthSelect.options[monthSelect.selectedIndex].text.replace(/\s/g, '');
+
+            // 1. Prepara o array de arrays (AOA) para o SheetJS
+            const aoaData = [];
+            
+            // Excel: Linha 1 (Título)
+            aoaData.push(["Planilha de Horas Extras - Estúdio Infocus", "Mês:", monthText]);
+            aoaData.push([]); // Linha 2 em branco
+            
+            // Excel: Linha 3 (Cabeçalho da Tabela)
+            aoaData.push([
+                "Data", "Dia", "Entrada Mat.", "Saída Mat.", "Entrada Vesp.", "Saída Vesp.", 
+                "Total Trabalhado", "Horas Extras", "Base Diária (Min)"
+            ]); 
+
+            let excelRow = 4; // Os dados começarão na linha 4 do array AOA, que é a LINHA 5 no Excel.
+
+            // 2. Itera pelas linhas do corpo da tabela e coleta os VALORES DE INPUT
+            tableBody.querySelectorAll('tr').forEach(row => {
+                const baseMinutes = row.dataset.baseMinutes;
+                const dayIndex = row.id.replace('row-', '');
+                
+                const dateCell = row.cells[0].textContent;
+                const dayOfWeekCell = row.cells[1].textContent;
+                
+                // Pega os dados de input salvos (para persistir no Excel)
+                const in1 = currentMonthData[dayIndex]?.in1 || '';
+                const out1 = currentMonthData[dayIndex]?.out1 || '';
+                const in2 = currentMonthData[dayIndex]?.in2 || '';
+                const out2 = currentMonthData[dayIndex]?.out2 || '';
+
+                // FÓRMULAS NATIVAS DO EXCEL (referenciando a linha atual)
+                // Total Trabalhado (Coluna G): (Saída Manhã - Entrada Manhã) + (Saída Tarde - Entrada Tarde)
+                const totalWorkedFormula = `=(D${excelRow}-C${excelRow})+(F${excelRow}-E${excelRow})`;
+                
+                // Horas Extras (Coluna H): Total Trabalhado (G) - (Base Diária (I) / 1440 minutos por dia)
+                const overtimeFormula = `=G${excelRow}-(I${excelRow}/1440)`;
+
+                // Adiciona a linha de dados, injetando as fórmulas nas células G e H
+                aoaData.push([
+                    dateCell, 
+                    dayOfWeekCell, 
+                    in1, 
+                    out1, 
+                    in2, 
+                    out2, 
+                    { f: totalWorkedFormula, t: 'n' }, // {f: formula, t: tipo numérico}
+                    { f: overtimeFormula, t: 'n' },    // {f: formula, t: tipo numérico}
+                    Number(baseMinutes)                 // Base Diária (como número)
+                ]);
+                excelRow++;
+            });
+            
+            // 3. Adiciona o Totalizador
+            const totalRow = excelRow + 1; // A linha do total fica uma linha após a última linha de dados
+            // Saldo Total (Coluna H): Soma da coluna H (Horas Extras)
+            const totalOvertimeFormula = `=SUM(H5:H${excelRow - 1})`;
+
+            aoaData.push([]); // Linha em branco
+            aoaData.push([
+                "Saldo Total de Horas Extras", "", "", "", "", "", "", { f: totalOvertimeFormula, t: 'n' }
+            ]);
+
+            // 4. Cria o objeto Workbook (Planilha)
+            const worksheet = XLSX.utils.aoa_to_sheet(aoaData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Planilha Horas");
+
+            // 5. Aplica formatação de largura e tempo nas colunas
+            worksheet['!cols'] = [
+                {wch: 10}, {wch: 5}, {wch: 14}, {wch: 14}, {wch: 16}, {wch: 16}, {wch: 15}, {wch: 15}, {wch: 15}
+            ];
+
+            // Aplica formatos de tempo para garantir que o Excel entenda as fórmulas corretamente
+            for (let i = 5; i < excelRow; i++) {
+                const totalWorkedCellRef = `G${i}`;
+                const overtimeCellRef = `H${i}`;
+                
+                // Formato de tempo padrão [h]:mm para Total Trabalhado
+                if (worksheet[totalWorkedCellRef]) {
+                    worksheet[totalWorkedCellRef].z = '[h]:mm';
+                }
+                
+                // Formato de tempo com sinal e cor para Horas Extras (Ex: +08:00 ou [Red]-01:30)
+                if (worksheet[overtimeCellRef]) {
+                    worksheet[overtimeCellRef].z = '+[h]:mm;[Red]-[h]:mm;0';
+                }
+                
+                // Formata as células de input de hora para HH:MM
+                for (const col of ['C', 'D', 'E', 'F']) {
+                    const cellRef = `${col}${i}`;
+                    if (worksheet[cellRef]) {
+                         worksheet[cellRef].z = 'HH:MM'; 
+                    }
+                }
+            }
+
+            // Formata a célula do Saldo Total
+            const totalOvertimeCellRef = `H${totalRow + 1}`;
+            if (worksheet[totalOvertimeCellRef]) {
+                worksheet[totalOvertimeCellRef].z = '+[h]:mm;[Red]-[h]:mm;0';
+            }
+
+            // 6. Força o download do arquivo XLSX
+            XLSX.writeFile(workbook, `Planilha_Horas_Infocus_${monthYear}.xlsx`);
+        }
+
+        // --- GERAÇÃO DA PLANILHA (VISUAL NO BROWSER) ---
+
+        async function generateMonthSheet(year, month) {
+            // Limpa e mostra status de carregamento
+            sheetContainer.innerHTML = '<p class="text-center py-10 text-xl font-medium text-blue-600">Carregando dados do mês e feriados...</p>';
+            sheetFooter.innerHTML = '';
+
+            const holidayDates = await fetchHolidays(year);
+            const daysInMonth = new Date(year, month, 0).getDate();
+            
+            // CARREGA DADOS SALVOS DO LOCAL STORAGE
+            const savedData = loadMonthData(year, month);
+            
+            let tableHtml = `
+                <table class="min-w-full w-full border-collapse border border-gray-300 shadow-md rounded-lg overflow-hidden">
+                    <thead class="bg-gray-100">
+                        <tr class="text-center">
+                            <th class="py-3 px-2 border border-gray-300 w-1/12">Data</th>
+                            <th class="py-3 px-2 border border-gray-300 w-1/12">Dia</th>
+                            <th class="py-3 px-2 border border-gray-300 w-2/12">Entrada Mat.</th>
+                            <th class="py-3 px-2 border border-gray-300 w-2/12">Saída Mat.</th>
+                            <th class="py-3 px-2 border border-gray-300 w-2/12">Entrada Vesp.</th>
+                            <th class="py-3 px-2 border border-gray-300 w-2/12">Saída Vesp.</th>
+                            <th class="py-3 px-2 border border-gray-300 w-1/12">Total Trab.</th>
+                            <th class="py-3 px-2 border border-gray-300 w-1/12">Horas Extras</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sheet-body" class="bg-white">
+            `;
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month - 1, day);
+                const dayOfWeek = date.getDay(); // 0 (Dom) - 6 (Sáb)
+                const dateStringISO = date.toISOString().split('T')[0]; // "YYYY-MM-DD"
+                
+                const dayKey = day.toString();
+                const savedEntry = savedData[dayKey] || {}; // Dados salvos
+
+                const isSunday = dayOfWeek === 0;
+                const isSaturday = dayOfWeek === 6;
+                const isHoliday = holidayDates.has(dateStringISO);
+
+                let rowClass = 'text-center';
+                let baseMinutes = HORA_BASE_SEMANA; // Padrão Mon-Fri (8 horas)
+
+                if (isSunday) {
+                    rowClass += ' is-sunday bg-red-50';
+                    baseMinutes = HORA_BASE_DOMINGO; // 0 horas
+                } else if (isHoliday) {
+                    rowClass += ' is-holiday bg-yellow-50';
+                    baseMinutes = HORA_BASE_FERIADO; // 0 horas
+                } else if (isSaturday) {
+                    baseMinutes = HORA_BASE_SABADO; // 4 horas
+                }
+
+                tableHtml += `
+                    <tr id="row-${day}" class="${rowClass}" 
+                        data-day-of-week="${dayOfWeek}" 
+                        data-is-holiday="${isHoliday}" 
+                        data-base-minutes="${baseMinutes}">
+                        <td class="py-2 px-2 border border-gray-200 font-medium">${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}</td>
+                        <td class="py-2 px-2 border border-gray-200 font-medium">${DIAS_SEMANA[dayOfWeek]}</td>
+                        <td class="py-2 px-2 border border-gray-200"><input type="time" class="time-input" data-col="in1" value="${savedEntry.in1 || ''}"></td>
+                        <td class="py-2 px-2 border border-gray-200"><input type="time" class="time-input" data-col="out1" value="${savedEntry.out1 || ''}"></td>
+                        <td class="py-2 px-2 border border-gray-200"><input type="time" class="time-input" data-col="in2" value="${savedEntry.in2 || ''}"></td>
+                        <td class="py-2 px-2 border border-gray-200"><input type="time" class="time-input" data-col="out2" value="${savedEntry.out2 || ''}"></td>
+                        <td class="py-2 px-2 border border-gray-200 font-bold text-gray-700 total-worked">00:00</td>
+                        <td class="py-2 px-2 border border-gray-200 font-bold overtime">00:00</td>
+                    </tr>
+                `;
+            }
+
+            tableHtml += `</tbody></table>`;
+            sheetContainer.innerHTML = tableHtml;
+
+            // Gera o rodapé com o totalizador
+            sheetFooter.innerHTML = `
+                <div class="flex justify-end">
+                    <div class="flex items-center space-x-4">
+                        <span class="text-lg font-semibold text-gray-800">Saldo Total de Horas Extras:</span>
+                        <span id="total-overtime" class="text-2xl font-bold text-gray-900 px-4 py-2 bg-gray-100 rounded-lg">00:00</span>
+                    </div>
+                </div>
+            `;
+
+            // RECALCULA E ATUALIZA TUDO APÓS CARREGAR OS DADOS
+            document.querySelectorAll('#sheet-body tr').forEach(row => {
+                calculateRow(row, false); // Não salva, apenas calcula
+            });
+            updateTotalOvertime();
+
+            // Adiciona listeners de evento (AGORA ACIONAM O SALVAMENTO LOCAL)
+            document.querySelectorAll('.time-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const row = e.target.closest('tr');
+                    calculateRow(row, true); // O 'true' indica que o cálculo deve acionar o salvamento local
+                });
+            });
+        }
+
+        // --- FUNÇÕES DE NAVEGAÇÃO E UTILS ---
+
+        async function fetchHolidays(year) {
+            if (holidaysCache[year]) {
+                return holidaysCache[year];
+            }
+            try {
+                // Tenta buscar feriados do Brasil API com retentativas
+                const maxRetries = 3;
+                let lastError = null;
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        const response = await fetch(`https://brasilapi.com.br/api/feriados/v1/${year}`);
+                        if (!response.ok) {
+                            throw new Error('Falha na resposta da API.');
+                        }
+                        const data = await response.json();
+                        const holidayDates = new Set(data.map(h => h.date));
+                        holidaysCache[year] = holidayDates;
+                        return holidayDates;
+                    } catch (error) {
+                        lastError = error;
+                        // Espera exponencialmente antes de tentar novamente (1s, 2s, 4s)
+                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                    }
+                }
+                throw lastError; // Lança o último erro após falhar todas as retentativas
+            } catch (error) {
+                console.error("Erro fatal ao buscar feriados após várias retentativas:", error);
+                holidaysCache[year] = new Set();
+                return holidaysCache[year];
+            }
+        }
+
+        function populateMonthSelector() {
+            const months = [
+                { value: "2025-11", text: "Novembro 2025" },
+                { value: "2025-12", text: "Dezembro 2025" },
+            ];
+            const year2026 = [
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ];
+            year2026.forEach((month, index) => {
+                const monthValue = (index + 1).toString().padStart(2, '0');
+                months.push({
+                    value: `2026-${monthValue}`,
+                    text: `${month} 2026`
+                });
+            });
+
+            monthSelect.innerHTML = '';
+            months.forEach(month => {
+                const option = document.createElement('option');
+                option.value = month.value;
+                option.textContent = month.text;
+                monthSelect.appendChild(option);
+            });
+
+            monthSelect.value = "2025-11";
+        }
+
+        /**
+         * Inicializa a aplicação (sem Firebase)
+         */
+        function initApp() {
+            // Depois de inicializado, carrega o mês padrão
+            const [initialYear, initialMonth] = monthSelect.value.split('-').map(Number);
+            generateMonthSheet(initialYear, initialMonth);
+        }
+
+        // --- EXECUÇÃO INICIAL ---
+        
+        // Adiciona listener para trocar de mês
+        monthSelect.addEventListener('change', (e) => {
+            const [year, month] = e.target.value.split('-').map(Number);
+            generateMonthSheet(year, month);
+        });
+
+        // Inicia a aplicação
+        populateMonthSelector();
+        initApp(); 
+
+    </script>
+</body>
+</html>
