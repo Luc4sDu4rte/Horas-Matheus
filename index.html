@@ -31,8 +31,9 @@
             padding: 0.25rem;
         }
         
+        /* Em telas grandes, inputs de hora têm largura fixa */
         input[type="time"] {
-            width: 100px; /* Largura fixa para inputs de hora */
+            width: 100px; 
         }
         
         /* Remove setas do input de hora no Chrome/Safari */
@@ -55,6 +56,83 @@
             background-color: #bfdbfe; /* blue-200 */
         }
         /* --- FIM CORES --- */
+
+        /* ======================================================= */
+        /* === ADAPTAÇÃO MOBILE: CARD VIEW (max-width: 639px) ==== */
+        /* ======================================================= */
+        @media (max-width: 639px) { 
+            /* Remove a borda principal da tabela no mobile */
+            #sheet-container table {
+                border: none;
+            }
+
+            /* Esconde o cabeçalho tradicional da tabela no mobile */
+            #sheet-container thead {
+                display: none; 
+            }
+
+            /* Faz com que os elementos da tabela (corpo, linhas, células) se comportem como blocos */
+            #sheet-container tbody, 
+            #sheet-container tr, 
+            #sheet-container td {
+                display: block; 
+                width: 100%;
+            }
+
+            /* Estiliza a linha da tabela como um "card" */
+            #sheet-container tr {
+                margin-bottom: 1rem;
+                border: 1px solid #e2e8f0; 
+                border-radius: 0.5rem;
+                padding: 0.5rem;
+                box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            }
+
+            /* Estiliza cada célula (campo) */
+            #sheet-container td {
+                padding: 0.5rem 0.5rem;
+                text-align: left !important;
+                border: none;
+                border-bottom: 1px solid #f3f4f6; 
+                position: relative;
+            }
+            
+            #sheet-container td:last-child {
+                border-bottom: none; /* Remove linha no último item do card */
+            }
+
+            /* INJETA O RÓTULO (HEADER) DA COLUNA USANDO data-label */
+            #sheet-container td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                display: inline-block;
+                width: 110px; /* Largura do rótulo */
+                min-width: 110px;
+                margin-right: 0.5rem;
+                color: #4b5563; 
+            }
+            
+            /* Ajuste especial para os inputs de hora ficarem alinhados */
+            #sheet-container td:nth-child(3),
+            #sheet-container td:nth-child(4),
+            #sheet-container td:nth-child(5),
+            #sheet-container td:nth-child(6) {
+                 display: flex; 
+                 justify-content: space-between; /* Alinha rótulo à esquerda e input à direita */
+                 align-items: center;
+            }
+            
+            #sheet-container input[type="time"] {
+                width: auto; 
+                max-width: 120px;
+                text-align: right; /* Alinha a hora à direita */
+            }
+            
+            /* Remove o overflow-x-auto no mobile já que a tabela foi adaptada */
+            #sheet-container {
+                overflow-x: hidden;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-100 p-4 sm:p-8">
@@ -114,7 +192,7 @@
             </div>
         </div>
 
-        <!-- Container da Planilha -->
+        <!-- Container da Planilha. O overflow-x-auto é mantido para telas tablet onde a card-view não é aplicada. -->
         <div id="sheet-container" class="overflow-x-auto">
             <p class="text-center py-10 text-xl font-medium text-blue-600">Carregando dados...</p>
         </div>
@@ -260,7 +338,7 @@
                 });
             });
 
-            // Largura total da tabela (em mm): 15 + 10 + 20 + 20 + 20 + 20 + 20 + 20 = 145mm
+            // Largura total da tabela (em mm): 145mm
             const TABLE_WIDTH = 145; 
             // Margem calculada para centralizar: (210 - 145) / 2 = 32.5mm
             const TABLE_LEFT_MARGIN = (pageWidth - TABLE_WIDTH) / 2;
@@ -311,7 +389,6 @@
             
             // Centraliza o total com base na margem da tabela, não na página.
             const totalText = `Saldo Total de Horas Extras: ${totalOvertime}`;
-            const textWidth = pdf.getStringUnitWidth(totalText) * 14 / pdf.internal.scaleFactor; // Estimar largura do texto
             const textX = pageWidth - TABLE_LEFT_MARGIN; // Alinha à direita da tabela (PageWidth - LeftMargin)
             
             pdf.text(totalText, textX, yOffset, { align: 'right' });
@@ -670,7 +747,7 @@
         }
 
 
-        // --- GERAÇÃO DA PLANILHA (MANTIDA) ---
+        // --- GERAÇÃO DA PLANILHA (ADICIONADOS data-label) ---
 
         async function fetchHolidays(year) {
             if (holidaysCache[year]) {
@@ -713,18 +790,23 @@
             
             const savedData = loadMonthData(year, month);
             
+            const headers = [
+                "Data", "Dia", "Entrada Mat.", "Saída Mat.", 
+                "Entrada Vesp.", "Saída Vesp.", "Total Trabalhado", "Horas Extras"
+            ];
+            
             let tableHtml = `
                 <table class="min-w-full w-full border-collapse border border-gray-300 shadow-md rounded-lg overflow-hidden">
                     <thead class="bg-gray-100">
                         <tr class="text-center">
-                            <th class="py-3 px-2 border border-gray-300 w-1/12">Data</th>
-                            <th class="py-3 px-2 border border-gray-300 w-1/12">Dia</th>
-                            <th class="py-3 px-2 border border-gray-300 w-2/12">Entrada Mat.</th>
-                            <th class="py-3 px-2 border border-gray-300 w-2/12">Saída Mat.</th>
-                            <th class="py-3 px-2 border border-gray-300 w-2/12">Entrada Vesp.</th>
-                            <th class="py-3 px-2 border border-gray-300 w-2/12">Saída Vesp.</th>
-                            <th class="py-3 px-2 border border-gray-300 w-1/12">Total Trab.</th>
-                            <th class="py-3 px-2 border border-gray-300 w-1/12">Horas Extras</th>
+                            <th class="py-3 px-2 border border-gray-300 w-1/12">${headers[0]}</th>
+                            <th class="py-3 px-2 border border-gray-300 w-1/12">${headers[1]}</th>
+                            <th class="py-3 px-2 border border-gray-300 w-2/12">${headers[2]}</th>
+                            <th class="py-3 px-2 border border-gray-300 w-2/12">${headers[3]}</th>
+                            <th class="py-3 px-2 border border-gray-300 w-2/12">${headers[4]}</th>
+                            <th class="py-3 px-2 border border-gray-300 w-2/12">${headers[5]}</th>
+                            <th class="py-3 px-2 border border-gray-300 w-1/12">${headers[6]}</th>
+                            <th class="py-3 px-2 border border-gray-300 w-1/12">${headers[7]}</th>
                         </tr>
                     </thead>
                     <tbody id="sheet-body" class="bg-white">
@@ -759,21 +841,30 @@
                 } else if (isSaturday) {
                     baseMinutes = HORA_BASE_SABADO; 
                 }
-
+                
+                // Os atributos data-label foram adicionados aqui para o Card View funcionar no mobile
                 tableHtml += `
                     <tr id="row-${day}" class="${rowClass}" 
                         data-day-of-week="${dayOfWeek}" 
                         data-is-holiday="${isNationalHoliday}" 
                         data-is-municipal-holiday="${isMunicipalHoliday}"
                         data-base-minutes="${baseMinutes}">
-                        <td class="py-2 px-2 border border-gray-200 font-medium">${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}</td>
-                        <td class="py-2 px-2 border border-gray-200 font-medium">${DIAS_SEMANA[dayOfWeek]}</td>
-                        <td class="py-2 px-2 border border-gray-200"><input type="time" class="time-input" data-col="in1" value="${savedEntry.in1 || ''}"></td>
-                        <td class="py-2 px-2 border border-gray-200"><input type="time" class="time-input" data-col="out1" value="${savedEntry.out1 || ''}"></td>
-                        <td class="py-2 px-2 border border-gray-200"><input type="time" class="time-input" data-col="in2" value="${savedEntry.in2 || ''}"></td>
-                        <td class="py-2 px-2 border border-gray-200"><input type="time" class="time-input" data-col="out2" value="${savedEntry.out2 || ''}"></td>
-                        <td class="py-2 px-2 border border-gray-200 font-bold text-gray-700 total-worked">00:00</td>
-                        <td class="py-2 px-2 border border-gray-200 font-bold overtime">00:00</td>
+                        <!-- 1. Data -->
+                        <td class="py-2 px-2 border border-gray-200 font-medium" data-label="${headers[0]}">${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}</td>
+                        <!-- 2. Dia -->
+                        <td class="py-2 px-2 border border-gray-200 font-medium" data-label="${headers[1]}">${DIAS_SEMANA[dayOfWeek]}</td>
+                        <!-- 3. Entrada Mat. -->
+                        <td class="py-2 px-2 border border-gray-200" data-label="${headers[2]}"><input type="time" class="time-input" data-col="in1" value="${savedEntry.in1 || ''}"></td>
+                        <!-- 4. Saída Mat. -->
+                        <td class="py-2 px-2 border border-gray-200" data-label="${headers[3]}"><input type="time" class="time-input" data-col="out1" value="${savedEntry.out1 || ''}"></td>
+                        <!-- 5. Entrada Vesp. -->
+                        <td class="py-2 px-2 border border-gray-200" data-label="${headers[4]}"><input type="time" class="time-input" data-col="in2" value="${savedEntry.in2 || ''}"></td>
+                        <!-- 6. Saída Vesp. -->
+                        <td class="py-2 px-2 border border-gray-200" data-label="${headers[5]}"><input type="time" class="time-input" data-col="out2" value="${savedEntry.out2 || ''}"></td>
+                        <!-- 7. Total Trab. -->
+                        <td class="py-2 px-2 border border-gray-200 font-bold text-gray-700 total-worked" data-label="${headers[6]}">00:00</td>
+                        <!-- 8. Horas Extras -->
+                        <td class="py-2 px-2 border border-gray-200 font-bold overtime" data-label="${headers[7]}">00:00</td>
                     </tr>
                 `;
             }
