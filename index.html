@@ -57,15 +57,16 @@
         /* --- FIM CORES --- */
 
 
-        /* Estilos de impressão (Otimizados para PDF) */
+        /* Estilos de impressão e PDF (Otimizados para Saída Limpa) */
         @media print {
             body {
                 font-size: 10pt;
                 color: #000;
                 background-color: #fff;
             }
-            .print-hidden {
-                display: none;
+            /* Garante que controles e mensagens fiquem escondidos */
+            .print-hidden, #message-container { 
+                display: none !important;
             }
             .print-container {
                 width: 100%;
@@ -86,7 +87,7 @@
                 color: #000;
                 background-color: #fff !important; 
             }
-            /* Re-aplica cores de fundo específicas na impressão */
+            /* Re-aplica cores de fundo específicas na impressão/PDF */
             .is-sunday td, .is-national-holiday td, .is-municipal-holiday td {
                 -webkit-print-color-adjust: exact;
                 color-adjust: exact;
@@ -116,7 +117,7 @@
         <header class="text-center mb-6 border-b pb-6">
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Estúdio Infocus</h1>
             <h2 class="text-xl sm:text-2xl font-semibold text-gray-700 mt-2">Planilha de Horas Extras</h2>
-            <p class="text-lg text-gray-600 mt-1">Matheus Magalhães de Castro</p>
+            <p class="text-lg text-gray-600 mt-1">Matheus Pica de Marreta</p>
         </header>
 
         <!-- Controles de Navegação (Escondidos na impressão e na captura do PDF) -->
@@ -136,19 +137,19 @@
             </div>
             
             <!-- Botões de Ação -->
-            <div class="flex flex-wrap space-x-2 sm:space-x-4">
+            <div class="flex flex-wrap space-x-2 sm:space-x-4 mt-4 md:mt-0">
                 
                 <!-- Input de Arquivo Escondido para Importação -->
                 <input type="file" id="xlsx-file-input" accept=".xlsx" class="hidden" onchange="handleFileImport(event)">
 
-                <button onclick="document.getElementById('xlsx-file-input').click()" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2 md:mb-0">
+                <button onclick="document.getElementById('xlsx-file-input').click()" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2">
                     Importar do XLSX
                 </button>
-                <button onclick="exportToXLSX()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2 md:mb-0">
+                <button onclick="exportToXLSX()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2">
                     Exportar para XLSX
                 </button>
                 <!-- NOVO BOTÃO PARA GERAR ARQUIVO PDF -->
-                <button onclick="generatePDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2 md:mb-0">
+                <button onclick="generatePDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 sm:px-6 rounded-lg shadow transition duration-200 text-sm sm:text-base mb-2">
                     Gerar Arquivo PDF
                 </button>
                 <!-- BOTÃO DE IMPRESSÃO (FUNÇÃO ANTIGA) -->
@@ -229,7 +230,7 @@
             messageContainer.classList.remove('flex');
         }
 
-        // --- GERAÇÃO DE PDF (FUNÇÃO NOVA) ---
+        // --- GERAÇÃO DE PDF (FUNÇÃO OTIMIZADA PARA CONTEÚDO LONGO) ---
         window.generatePDF = async function() {
             if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined') {
                 showMessage("As bibliotecas de geração de PDF não foram carregadas. A função falhou.");
@@ -239,34 +240,54 @@
             const { jsPDF } = window.jspdf;
             const mainContent = document.querySelector('.print-container');
             
-            // 1. Mostrar loading sem botão
             showMessage("Gerando PDF... Por favor, aguarde.", "...", false); 
 
-            // 2. Esconder elementos de controle antes da captura
+            // 1. Prepara a Captura: Esconde controles e garante que todo o conteúdo seja visível
             const hiddenElements = document.querySelectorAll('.print-hidden');
+            const originalOverflow = sheetContainer.style.overflowX;
+            const originalHeight = sheetContainer.style.height;
+
             hiddenElements.forEach(el => el.style.display = 'none');
             
+            // Remove scrollbars e garante que o container expanda para o conteúdo total
+            sheetContainer.style.overflowX = 'visible';
+            sheetContainer.style.height = 'auto'; 
+
             try {
-                // 3. Capturar o conteúdo principal usando html2canvas
+                // 2. Capturar o conteúdo principal (aumenta a escala para melhor nitidez)
                 const canvas = await html2canvas(mainContent, { 
-                    scale: 2, // Aumenta a resolução
+                    scale: 3, 
                     logging: false,
                     useCORS: true 
                 });
 
                 const imgData = canvas.toDataURL('image/jpeg', 1.0);
-                // Define o PDF em modo Paisagem (Landscape) A4
-                const pdf = new jsPDF('l', 'mm', 'a4'); 
                 
+                // Configurações do PDF (Paisagem A4)
+                const pdf = new jsPDF('l', 'mm', 'a4'); 
                 const pdfWidth = 297; // Largura A4 paisagem em mm
                 const pdfHeight = 210; // Altura A4 paisagem em mm
                 
-                const imgHeight = canvas.height * pdfWidth / canvas.width;
+                // Calcula a altura da imagem no PDF, mantendo a proporção.
+                const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+                
+                let position = 0;
+                let heightLeft = imgHeight;
 
-                // 4. Adicionar a imagem do canvas ao PDF
-                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+                // 3. Adicionar imagem ao PDF com paginação
+                while (heightLeft > 0) {
+                    // Adiciona a imagem no ponto de corte
+                    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+                    heightLeft -= pdfHeight;
+                    
+                    if (heightLeft > 0) {
+                        pdf.addPage();
+                        // Move a posição para "cortar" a imagem no canvas original
+                        position = -((imgHeight - heightLeft) * (pdfWidth / imgHeight));
+                    }
+                }
 
-                // 5. Salvar o arquivo
+                // 4. Salvar o arquivo
                 const monthText = monthSelect.options[monthSelect.selectedIndex].text;
                 const yearText = yearSelect.value;
                 pdf.save(`Planilha_Horas_Infocus_${monthText}_${yearText}.pdf`);
@@ -275,7 +296,9 @@
                 console.error("Erro ao gerar o PDF:", error);
                 showMessage("Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.");
             } finally {
-                // 6. Voltar a mostrar os elementos de controle e fechar o loading
+                // 5. Limpeza: Restaura estilos e fecha o loading
+                sheetContainer.style.overflowX = originalOverflow;
+                sheetContainer.style.height = originalHeight;
                 hiddenElements.forEach(el => el.style.display = ''); 
                 closeMessage();
             }
